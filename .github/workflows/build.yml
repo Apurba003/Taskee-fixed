@@ -5,6 +5,8 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Every step that can fail writes its log to a file and passes it through
+# tool/annotate_ci.py, so errors show up as annotations in the run.
 jobs:
   test:
     name: Analyze & unit tests
@@ -25,10 +27,22 @@ jobs:
 
       - name: Analyze (informational)
         continue-on-error: true
-        run: flutter analyze --no-fatal-infos
+        run: |
+          set +e
+          flutter analyze --no-fatal-infos > analyze.log 2>&1
+          code=$?
+          python3 tool/annotate_ci.py analyze.log Taskee/
+          tail -n 30 analyze.log
+          exit $code
 
       - name: Unit tests
-        run: flutter test
+        run: |
+          set +e
+          flutter test --reporter expanded > test.log 2>&1
+          code=$?
+          python3 tool/annotate_ci.py test.log Taskee/
+          tail -n 40 test.log
+          exit $code
 
   android:
     name: Android APK
@@ -53,7 +67,13 @@ jobs:
         run: flutter pub get
 
       - name: Build release APK
-        run: flutter build apk --release
+        run: |
+          set +e
+          flutter build apk --release > build.log 2>&1
+          code=$?
+          python3 tool/annotate_ci.py build.log Taskee/
+          tail -n 30 build.log
+          exit $code
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
@@ -80,7 +100,13 @@ jobs:
         run: flutter pub get
 
       - name: Build iOS app without code signing
-        run: flutter build ios --release --no-codesign
+        run: |
+          set +e
+          flutter build ios --release --no-codesign > build.log 2>&1
+          code=$?
+          python3 tool/annotate_ci.py build.log Taskee/
+          tail -n 30 build.log
+          exit $code
 
       - name: Package unsigned IPA
         run: |
