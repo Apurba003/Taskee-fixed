@@ -1,0 +1,89 @@
+name: Build Taskee
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Analyze & unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze (informational)
+        continue-on-error: true
+        run: flutter analyze --no-fatal-infos
+
+      - name: Unit tests
+        run: flutter test
+
+  android:
+    name: Android APK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build release APK
+        run: flutter build apk --release
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: taskee-android-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+
+  ios:
+    name: iOS (unsigned IPA)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build iOS app without code signing
+        run: flutter build ios --release --no-codesign
+
+      - name: Package unsigned IPA
+        run: |
+          rm -rf Payload Taskee-unsigned.ipa
+          mkdir Payload
+          cp -R build/ios/iphoneos/Runner.app Payload/
+          zip -qr Taskee-unsigned.ipa Payload
+          rm -rf Payload
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: taskee-ios-unsigned-ipa
+          path: Taskee-unsigned.ipa
+          if-no-files-found: error
